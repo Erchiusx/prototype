@@ -12,8 +12,19 @@ instance IsString Operator where
   fromString = Operator
 
 instance Token' Operator where
-  read'token [] = return Nothing
+  read'token [] = lift Nothing
   read'token s = do
     let operator'chars = ":<>/?!+-_*&=|." :: String
     let (r, w) = (not . (`elem` operator'chars)) `break` s
-    return $ return (r, fromString w)
+    return (r, fromString w)
+
+instance HasField "name" Operator String where
+  getField = show
+
+instance Lexer'Environment Operator Operator Char where
+  scan = plain'scanner
+  begin = plain'scanner
+  ender = const False
+  close s = do
+    (s', o) <- read'token s
+    return (s', Nothing, o)

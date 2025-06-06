@@ -3,9 +3,6 @@ module Language.Prototype.Token.Keywords (Keyword (..)) where
 import Control.Monad (guard)
 import Data.String (IsString (fromString))
 import Language.Prototype.Token.Types
-  ( Token' (..)
-  , genKeywords
-  )
 
 $( genKeywords
     [ "case"
@@ -33,8 +30,8 @@ $( genKeywords
  )
 
 instance Token' Keyword where
-  read'token [] = return Nothing
-  read'token s@(h : _) = return $ do
+  read'token [] = lift Nothing
+  read'token s@(h : _) = do
     guard $ h `elem` ['a' .. 'z'] ++ ['A' .. 'Z']
     let (w, r) =
           ( not
@@ -48,3 +45,13 @@ instance Token' Keyword where
             `break` s
     guard $ w `elem` keywords
     return $ (r, fromString w)
+
+instance HasField "name" Keyword String where
+  getField = show
+instance Lexer'Environment Keyword Keyword Char where
+  scan = plain'scanner
+  begin = plain'scanner
+  close s = do
+    (s', k) <- read'token s
+    return (s', Nothing, k)
+  ender = const False

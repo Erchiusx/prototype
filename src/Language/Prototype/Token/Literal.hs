@@ -1,116 +1,266 @@
-module Language.Prototype.Token.Literal where
+module Language.Prototype.Token.Literal
+  ( Literal (..)
+  , Identifier (..)
+  , Template'String (..)
+  , String'Interpolation (..)
+  , Digit'Postfix (..)
+  ) where
 
+import Control.Applicative (asum)
+import Control.Monad (guard)
 import Control.Monad.State
   ( MonadState (get)
-  , State
   , modify
   )
-import GHC.Stack (HasCallStack)
+import Data.Char (isAscii)
+import Data.Maybe (listToMaybe)
+import Data.String (IsString (fromString))
 import Language.Prototype.Token.Types
-  ( String'State
-  , Token' (..)
-  )
 
 data Literal
-  = Num'Literal String
-  | String'Literal String
-  | Partial'String'Literal String
+  = Num'Literal String (Maybe Identifier)
+  | String'Literal [Char'Unit]
+  | Partial'String'Literal [Char'Unit]
+  | Close'String'Literal [Char'Unit]
   deriving Show
 
-type Char'Unit = (Bool, Char)
+newtype Identifier
+  = Identifier String
+  deriving Show
 
-read'char :: String -> Maybe (String, Char'Unit)
-read'char [] = Nothing
-read'char ('\\' : []) = Nothing
-read'char ('\\' : c : r) = Just (r, (True, c))
-read'char (c : r) = Just (r, (False, c))
+instance IsString Identifier where
+  fromString = Identifier
 
-rec'read'char
-  :: String
-  -> [Char'Unit]
-  -> Maybe (String, Char'Unit, [Char'Unit])
-rec'read'char s stoppers = case read'char s of
-  Nothing -> Nothing
-  Just (r, c)
-    | c `elem` stoppers ->
-        return (r, c, [])
-    | otherwise ->
-        ((c :) <$>) `fmap` rec'read'char r stoppers
+instance Token' Identifier where
+  read'token [] = lift Nothing
+  read'token s@(h : _) = do
+    guard $ h `elem` ['a' .. 'z'] ++ ['A' .. 'Z']
+    let (w, r) =
+          ( not
+              . ( `elem`
+                    ['a' .. 'z']
+                      ++ ['A' .. 'Z']
+                      ++ ['0' .. '9']
+                      ++ "'"
+                )
+          )
+            `break` s
+    return (r, fromString w)
 
-to'repr :: [Char'Unit] -> String
-to'repr [] = ""
-to'repr ((True, c) : cs) = '\\' : c : to'repr cs
-to'repr ((False, c) : cs) = c : to'repr cs
+instance HasField "name" Identifier String where
+  getField = "identifier"
+instance
+  Lexer'Environment
+    Identifier
+    (Maybe Identifier)
+    Char
+  where
+  scan = identifier'scanner
+  begin = \s -> do
+    (cs, c) <- identifier'scanner s
+    guard $ isAscii c
+    return (cs, c)
+  close [] = lift Nothing
+  close s@(h : _) = do
+    guard $ h `elem` ['a' .. 'z'] ++ ['A' .. 'Z']
+    let (w, r) =
+          ( not
+              . ( `elem`
+                    ['a' .. 'z']
+                      ++ ['A' .. 'Z']
+                      ++ ['0' .. '9']
+                      ++ "'"
+                )
+          )
+            `break` s
+    return (r, listToMaybe r, Just $ fromString w)
+  ender =
+    not
+      . ( `elem`
+            '\''
+              : ['a' .. 'z']
+              ++ ['A' .. 'Z']
+              ++ ['0' .. '9']
+        )
+
+digit :: Scanner Char
+digit [] = lift Nothing
+digit (c : cs)
+  | elem c $ ['0' .. '9'] ++ ",." = return (cs, c)
+  | otherwise = lift Nothing
+
+data Digit'Front'Part
+instance HasField "name" Digit'Front'Part String where
+  getField = "digit front part"
+instance Lexer'Environment Digit'Front'Part String Char where
+  scan = digit
+  begin = \s -> do
+    (cs, c) <- digit s
+    guard (c `elem` ['0' .. '9'])
+    return (cs, c)
+  ender = not . (`elem` ['0' .. '9'] ++ ",")
+  close = fullfill @Digit'Front'Part
+
+data Digit'Back'Part
+instance HasField "name" Digit'Back'Part String where
+  getField = "digit back part"
+instance Lexer'Environment Digit'Back'Part String Char where
+  scan = digit
+  begin = digit
+  ender = not . (`elem` ['0' .. '9'] ++ ",")
+  close = \s ->
+    let (l, r) = (not . (`elem` ['0' .. '9'] ++ ",")) `break` s
+     in return (r, listToMaybe r, l)
+
+data Digit'Postfix = Digit'Postfix
+instance HasField "name" Digit'Postfix String where
+  getField = "digit postfix"
+
+instance
+  Lexer'Environment
+    Digit'Postfix
+    Literal
+    Char
+  where
+  scan = undefined
+  ender = undefined
+  begin = begin @Digit'Front'Part @String
+  close = \s -> do
+    (rest, dot, front) <- close @Digit'Front'Part s
+    let
+      get'postfix
+        :: String
+        -> Maybe Char
+        -> String
+        -> State' (String, Maybe Char, Literal)
+      get'postfix s' c number = do
+        _ <- begin @Identifier s'
+        (rest', t, i) <-
+          close @Identifier s'
+        case i of
+          Nothing -> return (s', c, Num'Literal number i)
+          Just r ->
+            return $
+              (Num'Literal number) . Just <$> (rest', t, r)
+    case dot of
+      Just '.' -> do
+        (rest', c, back) <- close @Digit'Back'Part rest
+        get'postfix rest' c $ front ++ back
+      _ ->
+        get'postfix rest dot front
+
+-- data Plain'String = Plain'String
+-- instance HasField "name" Plain'String String where
+--   getField = "plain string"
+-- instance
+--   Lexer'Environment
+--     Plain'String
+--     (Literal)
+--     Char'Unit
+--   where
+--   scan = string'scanner
+--   begin = \s -> do
+--     (s', (False, '"')) <- string'scanner s
+--     return $ (s',) (False, '"')
+--   ender = (== (False, '"'))
+--   close = \s -> do
+--     (s', _) <-
+--       begin @Plain'String s
+--     (with'quote, end, consumed) <-
+--       fullfill @Plain'String s'
+--     let without'quote = case end of
+--           Nothing -> with'quote
+--           Just _ -> tail without'quote
+--     return
+--       (without'quote, end, String'Literal $ consumed)
+
+data Template'String = Template'String
+instance HasField "name" Template'String String where
+  getField = "template string"
+instance
+  Lexer'Environment
+    Template'String
+    Literal
+    Char'Unit
+  where
+  scan = string'scanner
+  begin = \s -> do
+    (s', c) <- string'scanner s
+    n <- get
+    case n of
+      [] -> do
+        guard $ c == (False, '"')
+        return (s', c)
+      Lexer'State e : _
+        | e.name == "string interpolation" -> do
+            guard $ c `elem` [(False, '}'), (False, '"')]
+            return (s', c)
+        | otherwise -> lift Nothing
+  ender = (`elem` [(False, '"'), (True, '{')])
+  close s = do
+    (s', (False, c')) <- begin @Template'String s
+    case c' of
+      '"' -> do
+        (with'quote, end, consumed) <-
+          fullfill @Template'String s'
+        case end of
+          Nothing -> do
+            return
+              ( with'quote
+              , end
+              , Partial'String'Literal consumed
+              )
+          Just c -> do
+            let without'quote = drop 1 with'quote
+            if c == (False, '{')
+              then do
+                modify (Lexer'State Template'String :)
+                return
+                  ( without'quote
+                  , end
+                  , Partial'String'Literal consumed
+                  )
+              else
+                return
+                  ( without'quote
+                  , end
+                  , String'Literal consumed
+                  )
+      '}' -> do
+        (with'quote, end, consumed) <-
+          fullfill @Template'String s'
+        case end of
+          Nothing -> do
+            modify $ drop 1
+            return
+              (with'quote, end, Close'String'Literal consumed)
+          Just c -> do
+            let without'quote = drop 1 with'quote
+            if c == (False, '{')
+              then
+                return
+                  ( without'quote
+                  , end
+                  , Partial'String'Literal consumed
+                  )
+              else do
+                modify $ drop 2
+                return
+                  ( without'quote
+                  , end
+                  , Close'String'Literal consumed
+                  )
+      _ -> undefined
+
+data String'Interpolation = String'Interpolation
+instance HasField "name" String'Interpolation String where
+  getField = "string interpolation"
+
+instance Lexer'Environment String'Interpolation () Char
 
 instance Token' Literal where
-  read'token = read'literal
-
-read'literal
-  :: HasCallStack
-  => String
-  -> State String'State (Maybe (String, Literal))
-read'literal [] = return Nothing
-read'literal s@(h : r)
-  | h `elem` ['0' .. '9'] = do
-      let (l, rest) =
-            ( `elem`
-                ( "~!@#$%^&*()_+-=[]\\{}|;':\",/<>? \t\n"
-                    :: String
-                )
-            )
-              `break` s
-      return $ Just (rest, Num'Literal l)
-  | h == '"' =
-      return $ do
-        (rest, _, units) <- rec'read'char r [(False, '"')]
-        return (rest, String'Literal $ to'repr units)
-  | h == '`' = do
-      let res = do
-            (rest, stopper, units) <-
-              rec'read'char r [(False, '`'), (True, '{')]
-            case stopper of
-              (False, '`') ->
-                return
-                  (rest, String'Literal $ to'repr units)
-              (True, '{') ->
-                return
-                  ( rest
-                  , Partial'String'Literal $
-                      to'repr units
-                  )
-              _ -> undefined
-      case res of
-        Nothing -> return Nothing
-        Just (_, (String'Literal _)) -> return res
-        Just (_, (Partial'String'Literal _)) -> do
-          modify (+ 1)
-          return res
-        _ -> undefined
-  | h == '}' = do
-      state <- get
-      if state == 0
-        then return Nothing
-        else do
-          let res = do
-                (rest, stopper, units) <-
-                  rec'read'char r [(False, '`'), (True, '{')]
-                case stopper of
-                  (False, '`') ->
-                    return
-                      (rest, String'Literal $ to'repr units)
-                  (True, '{') ->
-                    return
-                      ( rest
-                      , Partial'String'Literal $
-                          to'repr units
-                      )
-                  _ -> undefined
-          case res of
-            Nothing -> return Nothing
-            Just (_, (Partial'String'Literal _)) ->
-              return res
-            Just (_, (String'Literal _)) -> do
-              modify (+ (-1))
-              return res
-            _ -> undefined
-  | otherwise = return Nothing
+  read'token s =
+    asum
+      [ drop'middle <$> close @Digit'Postfix s
+      , drop'middle <$> close @Template'String s
+      ]

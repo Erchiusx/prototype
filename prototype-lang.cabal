@@ -54,6 +54,7 @@ extra-doc-files:    CHANGELOG.md
 common warnings
     ghc-options: -Wall
                  -ddump-splices
+                 -Wno-orphans
 
 common depends
     build-depends:
@@ -108,7 +109,6 @@ library
     -- Modules included in this library but not exported.
     other-modules:
       Language.Prototype.Token.Environment
-      Language.Prototype.Token.Identifier
       Language.Prototype.Token.Keywords
       Language.Prototype.Token.Literal
       Language.Prototype.Token.Operator
