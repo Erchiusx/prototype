@@ -3,7 +3,6 @@ module Language.Prototype.Token.Environment
   )
 where
 
-import Control.Applicative ((<|>))
 import Control.Monad (guard)
 import Control.Monad.State
   ( MonadState (..)
@@ -82,25 +81,35 @@ instance
       '}' -> drop'env Begin'Brace
       _ -> return ()
     return (cs, c)
-   where
-    drop'env target = do
-      (Lexer'State e) : _ <- get
-      guard $ e.name == target.name
-      modify $ drop 1
   scan = plain'scanner
   ender c = elem @[] c "|([{}]),.;\n"
   close [] = lift Nothing
-  close (c : cs) =
-    ( begin @Environment (c : cs)
-        >>= \(s, c') -> return (s, Just c', return $ to'env c)
-    )
-      <|> do
-        (Lexer'State e) : _ <- get
-        return
-          ( c : cs
-          , Nothing
-          , Left $
-              Unmatched'Environment e.name $
-                show $
-                  to'env c
-          )
+  close (c : cs) = do
+    guard $ elem @[] c "|()[]{}`,.;\n"
+    let env = to'env c
+    case show env of
+      'B' : 'e' : 'g' : 'i' : 'n' : '\'' : _ -> do
+        modify (Lexer'State env :)
+        return (cs, Just c, return env)
+      'E' : 'n' : 'd' : '\'' : env'name -> do
+        Lexer'State e : _ <- get
+        case e.name of
+          'B' : 'e' : 'g' : 'i' : 'n' : '\'' : env'name'
+            | env'name' == env'name -> do
+                modify $ drop 1
+                return (cs, Just c, return env)
+            | otherwise ->
+                return
+                  ( cs
+                  , Just c
+                  , Left $ Unmatched'Environment env'name' env'name
+                  )
+          _ -> return (cs, Just c, Left $ Unmatched'Environment "" env'name)
+      _ -> return (cs, Just c, return env)
+
+drop'env
+  :: HasField "name" p String => p -> State' ()
+drop'env target = do
+  (Lexer'State e) : _ <- get
+  guard $ e.name == target.name
+  modify $ drop 1

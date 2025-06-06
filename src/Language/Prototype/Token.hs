@@ -1,19 +1,19 @@
 module Language.Prototype.Token
   ( Source (..)
-  , module Language.Prototype.Token.Types
   , Parser
   , Token (..)
+  , module Language.Prototype.Token.Types
   , module Language.Prototype.Token.Environment
   , module Language.Prototype.Token.Keywords
   , module Language.Prototype.Token.Literal
   , module Language.Prototype.Token.Operator
+  , parse
   )
 where
 
 import Control.Applicative ((<|>))
-import Control.Monad.State
-  ( MonadState (get)
-  , evalStateT
+import Control.Monad.Identity
+  ( Identity (runIdentity)
   )
 import Data.Maybe (fromJust)
 import GHC.Stack (HasCallStack)
@@ -22,8 +22,13 @@ import Language.Prototype.Token.Keywords
 import Language.Prototype.Token.Literal
 import Language.Prototype.Token.Operator
 import Language.Prototype.Token.Types
-import Text.Parsec (Parsec)
-
+import Text.Parsec
+  ( ParseError
+  , Parsec
+  , SourceName
+  , runParserT
+  )
+import Control.Monad.State (evalStateT)
 
 newtype Source = Source String
 data Token
@@ -96,23 +101,24 @@ to'token'stream s = fromJust $ evalStateT @Maybe lexer []
   go ss (Right ts) =
     ( do
         (s', t) <- step ss
-        go s' $ Right $ t : ts
+        case t of
+          Left e ->
+            go s' $ Left e
+          Right t' ->
+            go s' $ Right $ t' : ts
     )
       <|> return (Right ts)
 
   step
-    :: HasCallStack => String -> State' (String, Token)
+    :: HasCallStack
+    => String
+    -> State' (String, Either Lexer'Error Token)
   step [] = lift Nothing
-  step s = do
-    envs <- get
-    case envs of
-      [] -> simple'step s
-      (Lexer'State e) : _ -> case e.name of
-        "string interpolation" -> simple'step s
-        'B':'e':'g':'i':'n':'\'':_ -> do undefined
-        _ -> undefined
+  step s' = simple'step s'
 
-  simple'step :: String -> State' (String, Token)
+  simple'step
+    :: String
+    -> State' (String, Either Lexer'Error Token)
   simple'step input =
     basic'lexer @Keyword input
       <|> basic'lexer @Operator input
@@ -120,15 +126,37 @@ to'token'stream s = fromJust $ evalStateT @Maybe lexer []
               (str, _, identifier) <- close @Identifier input
               case identifier of
                 Nothing -> lift Nothing
-                Just id' -> return (str, make'token id')
+                Just id' -> return (str, return $ make'token id')
           )
       <|> basic'lexer @Digit'Postfix input
       <|> basic'lexer @Template'String input
+      <|> ( do
+              (str, _, env) <- close @Environment input
+              return . (str,) $ make'token <$> env
+          )
 
   basic'lexer
     :: forall n s r
      . (Lexer'Environment n s r, Tokenable s)
-    => String -> State' (String, Token)
+    => String
+    -> State' (String, Either Lexer'Error Token)
   basic'lexer input =
     close @n input
-      >>= return . (make'token <$>) . drop'middle
+      >>= return . ((return . make'token) <$>) . drop'middle
+
+data Parser'Error
+  = Lexer'Error Lexer'Error
+  | Parse'Error ParseError
+
+parse
+  :: SourceName
+  -> Parser a
+  -> String
+  -> Either Parser'Error a
+parse name p source = do
+  case to'token'stream source of
+    Left e -> Left $ Lexer'Error e
+    Right tokens -> do
+      case runIdentity $ runParserT p () name tokens of
+        Left e -> Left $ Parse'Error e
+        Right a -> Right a

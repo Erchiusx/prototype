@@ -1,7 +1,5 @@
 module Main (main) where
-
-import Language.Prototype.Token.Keywords
-import Language.Prototype.Token.Types
+import Language.Prototype.Token
 
 main :: IO ()
 main = do

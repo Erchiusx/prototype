@@ -36,7 +36,10 @@ class Show a => Token' a where
     -> State' (String, a)
 
 data Lexer'Error
-  = Unmatched'Environment String String
+  = Unmatched'Environment
+  { expected :: String
+  , unexpected :: String
+  }
 
 type Scanner s =
   String -> State' (String, s)
