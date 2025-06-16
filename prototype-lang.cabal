@@ -117,6 +117,15 @@ library
     -- Directories containing source files.
     hs-source-dirs:   src
 
+library prototype-templates
+    import:           warnings
+    import:           depends
+    import:           languageversion
+
+    exposed-modules:
+      Data.String.Template
+    hs-source-dirs:   src
+
 executable prototype-lang
     -- Import common warning flags.
     import:           warnings
@@ -128,7 +137,8 @@ executable prototype-lang
 
     -- Other library packages from which modules are imported.
     build-depends:
-        prototype-lang
+        , prototype-lang
+        , prototype-templates
 
     -- Directories containing source files.
     hs-source-dirs:   exe
@@ -156,4 +166,5 @@ test-suite prototype-lang-test
 
     -- Test dependencies.
     build-depends:
-        prototype-lang
+        , prototype-lang
+        , prototype-templates

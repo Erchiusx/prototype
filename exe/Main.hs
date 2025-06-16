@@ -1,6 +1,11 @@
 module Main (main) where
+
+import Data.String.Template (str)
 import Language.Prototype.Token
 
 main :: IO ()
 main = do
-  putStrLn "Hello, Haskell!"
+  print $
+    [str|4
+    abc
+    |]

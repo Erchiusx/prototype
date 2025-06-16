@@ -6,10 +6,11 @@ module Language.Prototype.Ast.Types
   , unexpected
   , option
   , many
+  , Char'Unit
   )
 where
 
-import Language.Prototype.Token (Parser)
+import Language.Prototype.Token (Parser, Char'Unit)
 import Text.Parsec
   ( anyToken
   , many

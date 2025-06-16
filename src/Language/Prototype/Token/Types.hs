@@ -29,6 +29,7 @@ import Data.String (IsString (..))
 import GHC.Records (HasField (..))
 import GHC.Stack (HasCallStack)
 import Language.Haskell.TH
+import Text.Parsec (SourcePos)
 
 class Show a => Token' a where
   read'token
@@ -40,6 +41,7 @@ data Lexer'Error
   { expected :: String
   , unexpected :: String
   }
+  deriving Show
 
 type Scanner s =
   String -> State' (String, s)

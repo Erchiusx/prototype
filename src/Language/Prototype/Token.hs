@@ -8,13 +8,14 @@ module Language.Prototype.Token
   , module Language.Prototype.Token.Literal
   , module Language.Prototype.Token.Operator
   , parse
+  , to'token'stream
+  , Tokenable (make'token)
+  , Source'Token
   )
 where
 
 import Control.Applicative ((<|>))
-import Control.Monad.Identity
-  ( Identity (runIdentity)
-  )
+import Control.Monad.State (evalStateT)
 import Data.Maybe (fromJust)
 import GHC.Stack (HasCallStack)
 import Language.Prototype.Token.Environment
@@ -26,9 +27,8 @@ import Text.Parsec
   ( ParseError
   , Parsec
   , SourceName
-  , runParserT
+  , runParser, SourcePos
   )
-import Control.Monad.State (evalStateT)
 
 newtype Source = Source String
 data Token
@@ -38,6 +38,8 @@ data Token
   | Token'Operator Operator
   | Token'Identifier Identifier
   deriving Show
+
+type Source'Token = (SourcePos, Token)
 
 class Token' a => Tokenable a where
   make'token :: a -> Token
@@ -119,6 +121,8 @@ to'token'stream s = fromJust $ evalStateT @Maybe lexer []
   simple'step
     :: String
     -> State' (String, Either Lexer'Error Token)
+  simple'step (' ' : input) = simple'step input
+  simple'step ('\t' : input) = simple'step input
   simple'step input =
     basic'lexer @Keyword input
       <|> basic'lexer @Operator input
@@ -147,6 +151,7 @@ to'token'stream s = fromJust $ evalStateT @Maybe lexer []
 data Parser'Error
   = Lexer'Error Lexer'Error
   | Parse'Error ParseError
+  deriving Show
 
 parse
   :: SourceName
@@ -157,6 +162,6 @@ parse name p source = do
   case to'token'stream source of
     Left e -> Left $ Lexer'Error e
     Right tokens -> do
-      case runIdentity $ runParserT p () name tokens of
+      case runParser p () name tokens of
         Left e -> Left $ Parse'Error e
         Right a -> Right a

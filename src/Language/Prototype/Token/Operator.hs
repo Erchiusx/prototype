@@ -3,6 +3,7 @@ where
 
 import Data.String (IsString (..))
 import Language.Prototype.Token.Types
+import Control.Monad (guard)
 
 newtype Operator
   = Operator String
@@ -16,7 +17,8 @@ instance Token' Operator where
   read'token s = do
     let operator'chars = ":<>/?!+-_*&=|." :: String
     let (r, w) = (not . (`elem` operator'chars)) `break` s
-    return (r, fromString w)
+    guard $ r /= ""
+    return (w, fromString r)
 
 instance HasField "name" Operator String where
   getField = show
