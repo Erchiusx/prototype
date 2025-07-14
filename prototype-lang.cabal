@@ -62,6 +62,7 @@ common depends
       , mtl
       , parsec
       , template-haskell
+      , transformers
 
 common languageversion
     default-language:   GHC2021

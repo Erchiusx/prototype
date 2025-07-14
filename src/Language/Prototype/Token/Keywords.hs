@@ -29,9 +29,12 @@ $( genKeywords
     ]
  )
 
-instance Token' Keyword where
-  read'token [] = lift Nothing
-  read'token s@(h : _) = do
+instance Lexer'Unit Keyword where
+  size = length . show
+  wrap'lines = const 0
+instance Lexer'Environment' Keyword Keyword where
+  scan'unit [] = nothingT
+  scan'unit s@(h:_) = do
     guard $ h `elem` ['a' .. 'z'] ++ ['A' .. 'Z']
     let (w, r) =
           ( not
@@ -44,14 +47,8 @@ instance Token' Keyword where
           )
             `break` s
     guard $ w `elem` keywords
-    return $ (r, fromString w)
+    return $ (fromString w, r)
+  is'ender = const False
 
-instance HasField "name" Keyword String where
-  getField = show
-instance Lexer'Environment Keyword Keyword Char where
-  scan = plain'scanner
-  begin = plain'scanner
-  close s = do
-    (s', k) <- read'token s
-    return (s', Nothing, k)
-  ender = const False
+instance Token' Keyword where
+  scan'token = scan'unit' @Keyword

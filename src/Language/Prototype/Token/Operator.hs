@@ -1,9 +1,9 @@
 module Language.Prototype.Token.Operator (Operator (..))
 where
 
+import Control.Monad (guard)
 import Data.String (IsString (..))
 import Language.Prototype.Token.Types
-import Control.Monad (guard)
 
 newtype Operator
   = Operator String
@@ -12,21 +12,17 @@ newtype Operator
 instance IsString Operator where
   fromString = Operator
 
+operator'chars :: String
+operator'chars = ":<>/?!+-_*&=|."
+
 instance Token' Operator where
-  read'token [] = lift Nothing
-  read'token s = do
-    let operator'chars = ":<>/?!+-_*&=|." :: String
+  scan'token [] = nothingT
+  scan'token s = do
     let (r, w) = (not . (`elem` operator'chars)) `break` s
     guard $ r /= ""
-    return (w, fromString r)
+    return (fromString r, w)
 
-instance HasField "name" Operator String where
-  getField = show
+instance Lexer'Environment' Operator Char where
+  scan'unit = scan'unit @Plain
 
-instance Lexer'Environment Operator Operator Char where
-  scan = plain'scanner
-  begin = plain'scanner
-  ender = const False
-  close s = do
-    (s', o) <- read'token s
-    return (s', Nothing, o)
+  is'ender = not . (`elem` operator'chars)

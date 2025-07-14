@@ -1,171 +1,155 @@
 module Language.Prototype.Token.Types
-  ( Token' (..)
-  , genKeywords
-  , genInstances
-  , fullfill
+  ( Lexer'State
+  , Lexer'State' (..)
+  , top'env
+  , Lexer'Environment' (..)
   , Lexer'Environment (..)
-  , Lexer'State (..)
-  , Scanner
-  , Char'Unit
-  , to'repr
-  , string'scanner
-  , plain'scanner
-  , identifier'scanner
-  , lift
-  , State'
-  , Has'Name
-  , HasField (..)
-  , drop'middle
-  , Lexer'Error (..)
+  , Token' (..)
+  , (<|>)
+  , nothingT
+  , move
+  , Plain
+  , Lexer'Unit (..)
+  , genKeywords
   )
 where
 
+-- data Surround'Type
+--   = Curly
+--   | Bracket
+--   | Round
+
+-- data Digit'Literal'Part
+--   = Digit'Literal'Front
+--   | Digit'Literal'Trail
+--   | Digit'Literal'Postfix
+-- re-export modules
+import Control.Applicative ((<|>))
+import Control.Monad.Trans qualified as Trans
+
+-- import for usage
 import Control.Monad.State
-  ( MonadTrans (lift)
-  , StateT
+  ( StateT
+  , get
+  , modify
+  , put
   )
 import Data.Char (toUpper)
 import Data.String (IsString (..))
-import GHC.Records (HasField (..))
-import GHC.Stack (HasCallStack)
-import Language.Haskell.TH
-import Text.Parsec (SourcePos)
+import Language.Haskell.TH.Syntax
+import Text.Parsec
+  ( SourcePos
+  , incSourceColumn
+  , incSourceLine
+  )
 
-class Show a => Token' a where
-  read'token
-    :: String
-    -> State' (String, a)
-
-data Lexer'Error
-  = Unmatched'Environment
-  { expected :: String
-  , unexpected :: String
+data Lexer'State' a
+  = Lexer'State
+  { position :: a
+  , environments :: [Lexer'Environment]
   }
   deriving Show
 
-type Scanner s =
-  String -> State' (String, s)
+type Lexer'State = Lexer'State' SourcePos
 
-type State' = StateT [Lexer'State] Maybe
+instance Functor Lexer'State' where
+  fmap f (Lexer'State pos envs) =
+    Lexer'State
+      (f pos)
+      envs
 
-fullfill
-  :: forall n r s
-   . ( Eq s
-     , Lexer'Environment n r s
-     )
-  => String
-  -> State' (String, (Maybe s), [s])
-fullfill = go []
- where
-  go
-    :: [s]
-    -> String
-    -> State' (String, (Maybe s), [s])
-  go acc ss = do
-    (s', c) <- scan @n @r ss
-    if ender @n @r c
-      then
-        return (s', Just c, reverse (c : acc))
-      else
-        go (c : acc) s'
+type State = StateT Lexer'State Maybe
+nothingT :: State a
+nothingT = Trans.lift Nothing
 
-type Has'Name n = HasField "name" n String
+move :: Int -> Int -> State ()
+move a b =
+  modify
+    ( (`incSourceColumn` a)
+        . (`incSourceLine` b)
+        <$>
+    )
+
+top'env :: State Lexer'Environment
+top'env = do
+  Lexer'State{environments = top : _} <- get
+  return top
+
+class Lexer'Unit unit where
+  size :: unit -> Int
+  wrap'lines :: unit -> Int
+
 class
-  HasField "name" n String =>
-  Lexer'Environment n r s
-    | n -> s
-    , n -> r
+  Lexer'Unit unit =>
+  Lexer'Environment' a unit
+    | a -> unit
   where
-  scan :: Scanner s
-  begin :: Scanner s
-  ender :: s -> Bool
-  close
-    :: HasCallStack
-    => String
-    -> State' (String, Maybe s, r)
+  scan'unit :: String -> State (unit, String)
+  scan'unit' :: String -> State (unit, String)
+  scan'unit' s = do
+    (u, s') <- scan'unit @a s
+    move (size u) (wrap'lines u)
+    return (u, s')
+  is'ender :: unit -> Bool
 
-drop'middle :: (a, b, c) -> (a, c)
-drop'middle (a, _, c) = (a, c)
-
-instance IsString (n -> String) where
-  fromString = const
-
-data Lexer'State
-  = forall s r n.
-    ( Lexer'Environment n s r
-    , HasField "name" n String
+data Lexer'Environment
+  = forall a u.
+    ( Show a
+    , Show u
+    , Lexer'Environment' a u
     ) =>
-    Lexer'State n
+    Lexer'Environment a
 
-type Char'Unit = (Bool, Char)
+instance Show Lexer'Environment where
+  show (Lexer'Environment a) = show a
 
-to'repr :: [Char'Unit] -> String
-to'repr [] = ""
-to'repr ((True, c) : cs) = '\\' : c : to'repr cs
-to'repr ((False, c) : cs) = c : to'repr cs
+class Token' a where
+  scan'token :: String -> State (a, String)
 
-string'scanner
-  :: Scanner Char'Unit
-string'scanner [] = lift Nothing
-string'scanner ('\\' : []) = lift Nothing
-string'scanner ('\\' : c : r) = lift $ Just (r, (True, c))
-string'scanner (c : r) = lift $ Just (r, (False, c))
+data Plain = Plain deriving Show
+instance Lexer'Unit Char where
+  size = const 1
+  wrap'lines = (\t -> if t then 1 else 0) . (== '\n')
+instance Lexer'Environment' Plain Char where
+  scan'unit [] = nothingT
+  scan'unit (c : cs) = return (c, cs)
 
-plain'scanner :: Scanner Char
-plain'scanner [] = lift Nothing
-plain'scanner (c : cs) = lift $ Just (cs, c)
+  is'ender = (`elem` ("([{\"" ++ ['0' .. '9']))
 
-identifier'scanner :: Scanner Char
-identifier'scanner [] = lift Nothing
-identifier'scanner (c : cs)
-  | c
-      `elem` ['a' .. 'z']
-        ++ ['A' .. 'Z']
-        ++ ['0' .. '9']
-        ++ "'" =
-      lift $
-        Just (cs, c)
-  | otherwise = lift $ Nothing
+-- Plain
+-- Surround Surround'Type
+-- Comment { inline'comment :: Bool }
+-- String'Literal
+-- String'Interpolation
+-- Digit'Literal Digit'Literal'Part
 
--- 将字符串转为构造子名：首字母大写
-toConName :: String -> Name
-toConName s = mkName $ capitalize s
- where
-  capitalize [] = []
-  capitalize (x : xs) = toUpper x : xs -- 强行大写首字母（ASCII）
-
--- Template Haskell 生成代码
 genKeywords :: [String] -> Q [Dec]
-genKeywords keywords = do
+genKeywords kws = do
   let
-    cons = map (\kw -> NormalC (toConName kw) []) keywords
-
-    sigDecl =
-      SigD
-        (mkName "keywords")
-        $ AppT ListT
-        $ ConT ''String
-
-    bindDecl =
-      ValD
-        (VarP $ mkName "keywords")
-        (NormalB $ ListE (map (LitE . StringL) keywords))
-        []
-
-    dataDecl =
+    keywords = map ((`NormalC` []) . make'keyword'name) kws
+    data'declare =
       DataD
         []
         (mkName "Keyword")
         []
         Nothing
-        cons
-        [DerivClause Nothing [ConT ''Show, ConT ''Eq]]
-
-    fromStringClauses = map mkClause keywords ++ [fallback]
-    mkClause kw =
+        keywords
+        [DerivClause Nothing [ConT ''Show]]
+    sig'declare =
+      SigD
+        (mkName "keywords")
+        $ AppT ListT
+        $ ConT ''String
+    bind'declare =
+      ValD
+        (VarP $ mkName "keywords")
+        (NormalB $ ListE (map (LitE . StringL) kws))
+        []
+    from'string'clauses = map make'clause kws ++ [fallback]
+    make'clause kw =
       Clause
         [LitP (StringL kw)]
-        (NormalB (ConE (toConName kw)))
+        (NormalB (ConE $ make'keyword'name kw))
         []
     fallback =
       Clause
@@ -178,29 +162,18 @@ genKeywords keywords = do
         )
         []
 
-    instDecl =
+    inst'declare =
       InstanceD
         Nothing
         []
         (AppT (ConT ''IsString) (ConT (mkName "Keyword")))
-        [FunD 'fromString fromStringClauses]
-
-  return [sigDecl, bindDecl, dataDecl, instDecl]
-
-genInstances :: [String] -> Q [Dec]
-genInstances typeNames =
-  return $ (flip map) typeNames $ \typeName ->
-    InstanceD
-      Nothing
-      []
-      ( AppT
-          (ConT $ mkName "Tokenable")
-          (ConT $ mkName typeName)
-      )
-      [ FunD (mkName "make'token") $
-          return $
-            Clause
-              []
-              (NormalB $ ConE $ mkName $ "Token'" ++ typeName)
-              []
-      ]
+        [FunD 'fromString from'string'clauses]
+  return
+    [ data'declare
+    , sig'declare
+    , bind'declare
+    , inst'declare
+    ]
+ where
+  make'keyword'name :: String -> Name
+  make'keyword'name (c : cs) = mkName $ "Keyword'" ++ toUpper c : cs
