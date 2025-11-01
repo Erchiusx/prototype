@@ -12,7 +12,8 @@ import Language.Prototype.Frontend.Lexer.Types
   )
 import Text.Megaparsec qualified as M
 
-plain :: forall a. Lexer'Unit a ~ Char => Scanner a
+plain
+  :: forall a. Lexer'Unit a ~ Char => Scanner a
 plain = M.anySingle
 
 -- Char'Unit represents a character and a boolean indicating whether it was escaped.

@@ -23,7 +23,7 @@ instance Token' RegExp
 instance Lexer'Environment' Env'RegExp where
   scanner _ = char'unit @Env'RegExp
   yield _ =
-     ranged $
+    ranged $
       RegExp . expand'repr <$> go []
    where
     go :: [Char'Unit] -> Lexer [Char'Unit]
