@@ -1,8 +1,8 @@
 module Main (main) where
 
-import qualified MyLib (someFunc)
+import Language.Prototype.Frontend.Lexer.Identifier
 
 main :: IO ()
 main = do
   putStrLn "Hello, Haskell!"
-  MyLib.someFunc
+  print $ read @Keyword "Let"

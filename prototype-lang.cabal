@@ -62,6 +62,7 @@ common dependencies
     , bytestring
     , megaparsec
     , text
+    , mtl
 
 common extensions
   default-extensions:
@@ -94,13 +95,14 @@ library
   import:           extensions
 
   -- Modules exported by the library.
+  build-depends:
   exposed-modules:
-    Language.Prototype.Frontend.Lexer.Types
     Language.Prototype.Frontend.Lexer.Identifier
     Language.Prototype.Frontend.Lexer.RegExp
+    Language.Prototype.Frontend.Lexer.Scanner
     Language.Prototype.Frontend.Lexer.String
     Language.Prototype.Frontend.Lexer.Symbol
-    Language.Prototype.Frontend.Lexer.Scanner
+    Language.Prototype.Frontend.Lexer.Types
 
   -- Modules included in this library but not exported.
   -- other-modules:
