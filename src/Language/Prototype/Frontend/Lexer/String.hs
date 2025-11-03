@@ -13,13 +13,9 @@ import Language.Prototype.Frontend.Lexer.Types
   , enter
   , just
   , ranged
+  , pattern Open
   )
 import Text.Megaparsec (MonadParsec (lookAhead))
-
-pattern Open :: Bool
-pattern Open = False
-pattern Close :: Bool
-pattern Close = True
 
 data String'Component
   = Interpolation Bool

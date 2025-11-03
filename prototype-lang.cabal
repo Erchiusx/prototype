@@ -87,6 +87,7 @@ common extensions
     TupleSections
     TypeApplications
     TypeFamilies
+    ViewPatterns
 
 library
   -- Import common warning flags.
@@ -97,6 +98,7 @@ library
   -- Modules exported by the library.
   build-depends:
   exposed-modules:
+    Language.Prototype.Frontend.Lexer
     Language.Prototype.Frontend.Lexer.Identifier
     Language.Prototype.Frontend.Lexer.RegExp
     Language.Prototype.Frontend.Lexer.Scanner

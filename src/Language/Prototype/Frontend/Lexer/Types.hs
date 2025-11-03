@@ -14,10 +14,11 @@ module Language.Prototype.Frontend.Lexer.Types
   , ranged
   , fulfill'current'env
   , just
+  , pattern Close
+  , pattern Open
   )
 where
 
-import Control.Monad.Identity (Identity)
 import Control.Monad.State
 import Control.Monad.State.Class qualified as ST
 import Data.Aeson (ToJSON (..), object, (.=))
@@ -64,6 +65,9 @@ instance Ord Lex'Error where
       other -> other
 
 class Token' a
+instance
+  forall a b
+   . (Token' a, Token' b) => Token' (Either a b)
 
 data Token = forall a. Token' a => Token
   { tokenRange :: (M.SourcePos, M.SourcePos)
@@ -132,6 +136,9 @@ fulfill'current'env = do
 just
   :: forall e s m a
    . M.MonadParsec e s m => m a -> m [a]
-just p = do
-  a <- p
-  return [a]
+just = fmap (: [])
+
+pattern Open :: Bool
+pattern Open = False
+pattern Close :: Bool
+pattern Close = True

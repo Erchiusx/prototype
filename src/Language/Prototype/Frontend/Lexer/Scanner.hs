@@ -24,7 +24,9 @@ char'unit = do
   mc <- M.anySingle
   case mc of
     '\\' -> do
-      c <- M.anySingle
+      c <-
+        M.anySingle
+          M.<?> "expected character after escape backslash"
       return (True, c)
     _ -> return (False, mc)
 
