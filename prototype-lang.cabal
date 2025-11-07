@@ -61,8 +61,8 @@ common dependencies
     , base
     , bytestring
     , megaparsec
-    , text
     , mtl
+    , text
 
 common extensions
   default-extensions:
@@ -100,6 +100,7 @@ library
   exposed-modules:
     Language.Prototype.Frontend.Lexer
     Language.Prototype.Frontend.Lexer.Identifier
+    Language.Prototype.Frontend.Lexer.Number
     Language.Prototype.Frontend.Lexer.RegExp
     Language.Prototype.Frontend.Lexer.Scanner
     Language.Prototype.Frontend.Lexer.String

@@ -2,10 +2,14 @@ module Language.Prototype.Frontend.Lexer.Scanner
   ( plain
   , Char'Unit
   , char'unit
-  , normal'repr
-  , expand'repr
+  , Char'Units (..)
   ) where
 
+import Data.Aeson
+  ( ToJSON (toJSON)
+  , Value (String)
+  )
+import Data.Text (pack)
 import Language.Prototype.Frontend.Lexer.Types
   ( Lexer'Unit
   , Scanner
@@ -18,6 +22,8 @@ plain = M.anySingle
 
 -- Char'Unit represents a character and a boolean indicating whether it was escaped.
 type Char'Unit = (Bool, Char)
+newtype Char'Units = Char'Units [Char'Unit]
+  deriving (Show, Eq)
 char'unit
   :: forall a. Lexer'Unit a ~ Char'Unit => Scanner a
 char'unit = do
@@ -30,8 +36,11 @@ char'unit = do
       return (True, c)
     _ -> return (False, mc)
 
-normal'repr :: [Char'Unit] -> String
-normal'repr = map snd
-
-expand'repr :: [Char'Unit] -> String
-expand'repr = concatMap $ \(x, y) -> if x then ['\\', y] else [y]
+instance ToJSON Char'Units where
+  toJSON (Char'Units l) = String $ pack $ do
+    (e, c) <- l
+    if e
+      then
+        ['\\', c]
+      else
+        return c

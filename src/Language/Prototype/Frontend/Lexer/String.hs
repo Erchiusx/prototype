@@ -1,49 +1,84 @@
-module Language.Prototype.Frontend.Lexer.String where
+module Language.Prototype.Frontend.Lexer.String
+  ( String'Component (..)
+  , String'Component'Type (..)
+  , Env'String (..)
+  )
+where
 
+import Data.Aeson
+import Data.Text (pack)
 import Language.Prototype.Frontend.Lexer.Scanner
   ( Char'Unit
+  , Char'Units (..)
   , char'unit
   )
 import Language.Prototype.Frontend.Lexer.Types
   ( Lexer
-  , Lexer'Environment (Lexer'State)
   , Lexer'Environment' (..)
   , Lexer'Unit
-  , Token'
+  , Token' (..)
   , enter
-  , just
   , ranged
   , pattern Open
   )
-import Text.Megaparsec (MonadParsec (lookAhead))
+import Text.Megaparsec
+  ( ErrorItem (EndOfInput)
+  , MonadParsec (lookAhead)
+  , satisfy
+  , unexpected
+  )
 
 data String'Component
   = Interpolation Bool
-  | Raw [Char'Unit]
+  | Raw Char'Units
 
-newtype Env'String env'expression
-  = Env'String env'expression
+data Env'String env'expression
+  = Env'String env'expression String'Component'Type
+
+data String'Component'Type
+  = Enter'String
+  | Close'Interpolation
+
+instance ToJSON String'Component where
+  toJSON (Interpolation o) =
+    object
+      [ "type" .= pack "interpolation-flag"
+      , "content" .= o
+      ]
+  toJSON (Raw c) =
+    object
+      [ "type" .= pack "string-component"
+      , "content" .= c
+      ]
 
 type instance
   Lexer'Unit (Env'String env'expression) =
     Char'Unit
-instance Token' String'Component
+instance Token' String'Component (Either Bool Char'Units) where
+  content (Interpolation t) = Just $ Left t
+  content (Raw repr) = Just $ Right repr
+
 instance
   Lexer'Environment' env'expression
   => Lexer'Environment' (Env'String env'expression)
   where
   scanner _ = char'unit @(Env'String env'expression)
-  fulfill = just . yield
-  yield e@(Env'String env'expression) = ranged $ do
+  yield e@(Env'String env'expression component'type) = ranged $ do
+    _ <-
+      satisfy
+        ( ==
+            case component'type of
+              Close'Interpolation -> '}'
+              Enter'String -> '"'
+        )
     scanned <- read'string'literal
     case scanned of
       ([], (True, '{')) -> do
-        enter $ Lexer'State env'expression
+        enter env'expression
         return $ Interpolation Open
-      (str, (False, '"')) -> return $ Raw str
+      (str, (False, '"')) -> return $ Raw $ Char'Units str
       _ ->
-        fail
-          "error condition: unknown terminator of string"
+        unexpected EndOfInput
    where
     read'string'literal
       :: Lexer ([Char'Unit], Char'Unit)

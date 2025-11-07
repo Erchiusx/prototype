@@ -5,7 +5,9 @@ module Language.Prototype.Frontend.Lexer.Identifier
   ) where
 
 import Control.Applicative qualified as A
+import Data.Aeson
 import Data.Char (isAlpha, isAlphaNum)
+import Data.Text (pack)
 import Language.Prototype.Frontend.Lexer.Scanner
   ( plain
   )
@@ -13,7 +15,7 @@ import Language.Prototype.Frontend.Lexer.Types
   ( Lexer
   , Lexer'Environment' (..)
   , Lexer'Unit
-  , Token'
+  , Token' (..)
   , ranged
   , rewind
   )
@@ -34,10 +36,34 @@ data Keyword
   | Async
   | Await
   | Do
+  | Import
+  | Export
   deriving (Read, Show)
 
-instance Token' Identifier
-instance Token' Keyword
+instance ToJSON Identifier where
+  toJSON (Identifier i) =
+    object
+      [ "content" .= String (pack i)
+      , "type" .= pack "identifier"
+      ]
+
+instance ToJSON Keyword where
+  toJSON k =
+    object
+      [ "content" .= toJSON (show k)
+      , "type" .= pack "keyword"
+      ]
+
+instance Token' Identifier Identifier where
+  content = Just
+instance Token' Keyword Keyword where
+  content = Just
+instance
+  Token'
+    (Either Keyword Identifier)
+    (Either Keyword Identifier)
+  where
+  content = Just
 data Env'Identifier = Env'Identifier
 type instance Lexer'Unit Env'Identifier = Char
 instance Lexer'Environment' Env'Identifier where
@@ -59,7 +85,3 @@ instance Lexer'Environment' Env'Identifier where
       case readMaybe @Keyword str of
         Just kw -> return $ Left kw
         Nothing -> return $ Right $ Identifier str
-
-  fulfill _ = do
-    token <- yield Env'Identifier
-    return [token]
