@@ -1,0 +1,74 @@
+[
+    "",
+    [
+        {
+            "range": "test.p:5:5-5:8",
+            "token": {
+                "Right": {
+                    "content": "and",
+                    "type": "identifier"
+                }
+            }
+        },
+        {
+            "range": "test.p:5:9-5:11",
+            "token": {
+                "content": "Raw'Symbol \"<>\"",
+                "type": "symbols"
+            }
+        },
+        {
+            "range": "test.p:5:12-5:28",
+            "token": {
+                "content": "interpolations ",
+                "type": "string-component"
+            }
+        },
+        {
+            "range": "test.p:5:28-5:30",
+            "token": {
+                "content": false,
+                "type": "interpolation-flag"
+            }
+        },
+        {
+            "range": "test.p:5:31-5:32",
+            "token": {
+                "Right": {
+                    "content": "a",
+                    "type": "identifier"
+                }
+            }
+        },
+        {
+            "range": "test.p:5:33-5:34",
+            "token": {
+                "content": "Raw'Symbol \"+\"",
+                "type": "symbols"
+            }
+        },
+        {
+            "range": "test.p:5:35-5:36",
+            "token": {
+                "Right": {
+                    "content": "b",
+                    "type": "identifier"
+                }
+            }
+        },
+        {
+            "range": "test.p:5:37-5:37",
+            "token": {
+                "content": true,
+                "type": "interpolation-flag"
+            }
+        },
+        {
+            "range": "test.p:5:37-5:46",
+            "token": {
+                "content": " result",
+                "type": "string-component"
+            }
+        }
+    ]
+]

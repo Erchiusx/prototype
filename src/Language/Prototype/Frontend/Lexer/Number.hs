@@ -49,6 +49,7 @@ instance ToJSON Number'Postfix where
 data Env'Number
   = Env'Number'Component
   | Env'Number'Postfix
+  deriving Show
 instance Token' Number'Component String where
   content (Number'Component n) = Just n
 instance Token' Number'Postfix String where

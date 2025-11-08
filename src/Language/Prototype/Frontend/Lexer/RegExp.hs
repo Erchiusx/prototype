@@ -27,7 +27,7 @@ instance ToJSON RegExp where
       , "type" .= pack "regex"
       ]
 
-data Env'RegExp = Env'RegExp
+data Env'RegExp = Env'RegExp deriving Show
 type instance Lexer'Unit Env'RegExp = Char'Unit
 instance Token' RegExp Char'Units where
   content (RegExp regex) = Just regex
@@ -35,7 +35,8 @@ instance Lexer'Environment' Env'RegExp where
   scanner _ = char'unit @Env'RegExp
   yield _ =
     ranged $
-      RegExp . Char'Units <$> go []
+      RegExp . Char'Units
+        <$> (scanner Env'RegExp >> go [])
    where
     go :: [Char'Unit] -> Lexer [Char'Unit]
     go r = do

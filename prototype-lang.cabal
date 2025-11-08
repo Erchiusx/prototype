@@ -58,11 +58,13 @@ common warnings
 common dependencies
   build-depends:
     , aeson
+    , aeson-pretty
     , base
     , bytestring
     , megaparsec
     , mtl
     , text
+    , interpolate
 
 common extensions
   default-extensions:
@@ -138,6 +140,7 @@ executable prototype-lang
   build-depends:
     , base            ^>=4.21.0.0
     , prototype-lang
+    , text
 
   -- Directories containing source files.
   hs-source-dirs:   app
@@ -171,3 +174,7 @@ test-suite prototype-lang-test
   build-depends:
     , base            ^>=4.21.0.0
     , prototype-lang
+    , text
+    , aeson
+    , aeson-pretty
+    , bytestring

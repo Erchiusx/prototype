@@ -6,7 +6,7 @@ module Language.Prototype.Frontend.Lexer.Identifier
 
 import Control.Applicative qualified as A
 import Data.Aeson
-import Data.Char (isAlpha, isAlphaNum)
+import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Text (pack)
 import Language.Prototype.Frontend.Lexer.Scanner
   ( plain
@@ -64,7 +64,7 @@ instance
     (Either Keyword Identifier)
   where
   content = Just
-data Env'Identifier = Env'Identifier
+data Env'Identifier = Env'Identifier deriving Show
 type instance Lexer'Unit Env'Identifier = Char
 instance Lexer'Environment' Env'Identifier where
   scanner _ = plain @Env'Identifier
@@ -82,6 +82,7 @@ instance Lexer'Environment' Env'Identifier where
       :: Lexer String -> Lexer (Either Keyword Identifier)
     constructed lexeme = do
       str <- lexeme
-      case readMaybe @Keyword str of
+      case readMaybe @Keyword
+        ((\(x : rest) -> toUpper x : rest) str) of
         Just kw -> return $ Left kw
         Nothing -> return $ Right $ Identifier str

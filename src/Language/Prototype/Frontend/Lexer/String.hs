@@ -5,8 +5,14 @@ module Language.Prototype.Frontend.Lexer.String
   )
 where
 
+import Control.Monad (guard)
 import Data.Aeson
+  ( KeyValue ((.=))
+  , ToJSON (toJSON)
+  , object
+  )
 import Data.Text (pack)
+import Data.Typeable (typeOf)
 import Language.Prototype.Frontend.Lexer.Scanner
   ( Char'Unit
   , Char'Units (..)
@@ -14,17 +20,19 @@ import Language.Prototype.Frontend.Lexer.Scanner
   )
 import Language.Prototype.Frontend.Lexer.Types
   ( Lexer
+  , Lexer'Environment (Lexer'State)
   , Lexer'Environment' (..)
   , Lexer'Unit
   , Token' (..)
+  , enchanted
   , enter
   , ranged
+  , rewind
   , pattern Open
   )
 import Text.Megaparsec
   ( ErrorItem (EndOfInput)
   , MonadParsec (lookAhead)
-  , satisfy
   , unexpected
   )
 
@@ -34,10 +42,12 @@ data String'Component
 
 data Env'String env'expression
   = Env'String env'expression String'Component'Type
+  deriving Show
 
 data String'Component'Type
   = Enter'String
   | Close'Interpolation
+  deriving Show
 
 instance ToJSON String'Component where
   toJSON (Interpolation o) =
@@ -62,23 +72,26 @@ instance
   Lexer'Environment' env'expression
   => Lexer'Environment' (Env'String env'expression)
   where
+  transform (Env'String e _) = Env'String e Close'Interpolation
   scanner _ = char'unit @(Env'String env'expression)
   yield e@(Env'String env'expression component'type) = ranged $ do
-    _ <-
-      satisfy
-        ( ==
-            case component'type of
-              Close'Interpolation -> '}'
-              Enter'String -> '"'
-        )
-    scanned <- read'string'literal
-    case scanned of
-      ([], (True, '{')) -> do
+    leader <- scanner e
+    guard $
+      case component'type of
+        Close'Interpolation -> leader == (False, '}')
+        Enter'String -> leader `elem` [(False, '"'), (True, '{')]
+    if leader == (True, '{')
+      then do
         enter env'expression
         return $ Interpolation Open
-      (str, (False, '"')) -> return $ Raw $ Char'Units str
-      _ ->
-        unexpected EndOfInput
+      else do
+        scanned <- read'string'literal
+        case scanned of
+          (str, (False, '"')) -> rewind >> return (Raw $ Char'Units str)
+          (str, (True, '{')) ->
+            return (Raw $ Char'Units str)
+          _ ->
+            unexpected EndOfInput
    where
     read'string'literal
       :: Lexer ([Char'Unit], Char'Unit)
@@ -88,7 +101,15 @@ instance
       c <- lookAhead $ scanner e
       case c of
         (True, '{') -> return (reverse cs, c)
-        (False, '"') -> return (reverse cs, c)
+        (False, '"') -> scanner e >> return (reverse cs, c)
         _ -> do
           _ <- scanner e
           go $ c : cs
+  fulfill e = do
+    h <- yield' e
+    (Lexer'State e') <- enchanted
+    if typeOf e == typeOf e'
+      then do
+        l <- yield' e
+        return [h, l]
+      else return [h]
